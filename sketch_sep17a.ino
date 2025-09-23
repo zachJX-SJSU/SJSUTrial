@@ -1,28 +1,85 @@
 #include <Servo.h>
+#include <Wire.h>
 
+/* Set up */
+// ---- Servo Setup ----
 Servo servo1;
 int SERV_PIN1 = 9;
 int angle = 0;
 
+// ---- MPU setup ----
+#define MPU_ADDR      0x68   // Default MPU6050 address (AD0=GND → 0x68, AD0=VCC → 0x69)
+#define REG_PWR_MGMT1 0x6B   // Register: power management (controls sleep/wake)
+#define REG_ACCEL_XH  0x3B   // First register of the accelerometer output (14 bytes span Ax..Gz)
+
+const float ACC_LSB_PER_G    = 16384.0f;  // accelerometer: 16384 LSB = 1 g
+const float GYRO_LSB_PER_DPS = 131.0f;    // gyroscope: 131 LSB = 1 °/s
+/* End of set up */
+
+/* Helper functions for MPU communication, since MPU library is not allowed*/
+// combine two 8-bit registers into one signed 16-bit value
+static inline int16_t make16(uint8_t hi, uint8_t lo) { 
+  return (int16_t)((hi << 8) | lo); 
+}
+
+// ---- I²C helper functions ----
+void i2cWrite8(uint8_t reg, uint8_t val) {
+  // Write one byte (val) into register (reg) of MPU6050
+  Wire.beginTransmission(MPU_ADDR); // Start communication with MPU
+  Wire.write(reg);                  // Tell it which register
+  Wire.write(val);                  // Provide the value to write
+  Wire.endTransmission(true);       // End transmission and release the bus
+}
+
+void i2cReadN(uint8_t startReg, uint8_t *buf, uint8_t n) {
+  // Read multiple bytes sequentially starting at startReg
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(startReg);             // Start address
+  Wire.endTransmission(false);      // Repeated start
+  Wire.requestFrom(MPU_ADDR, n, true); // Request n bytes
+  for (uint8_t i = 0; i < n && Wire.available(); i++) {
+    buf[i] = Wire.read();           // Store into buffer
+  }
+}
+/* End of Helper functions*/
+
 void setup() {
   // put your setup code here, to run once:
   servo1.attach(SERV_PIN1);
-  Serial.begin(9600);
+  Serial.begin(9600);     // May change to 115200 baud for faster rate
+  Wire.begin();           // Start I²C as master on SDA/SCL pins of Uno R4
+
+  // Wake up the MPU6050 (it starts in sleep mode by default)
+  i2cWrite8(REG_PWR_MGMT1, 0x00); // Clear the sleep bit
+  delay(50);                      // Small delay to stabilize
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  
-  while (angle < 180) {
-    Serial.println(angle);
-    servo1.write(angle);
-    angle += 10;
-    
-    delay(100);
-  }
-  while (angle > 0) {
-    servo1.write(angle);
-    angle -= 10;
-    delay(100);
-  }
+  uint8_t b[14];                     // Buffer to hold 14 bytes from MPU
+  i2cReadN(REG_ACCEL_XH, b, 14);     // Read accel (6B), temp (2B), gyro (6B)
+
+  // Convert raw bytes into signed 16-bit integers
+  int16_t rawAx = make16(b[0],  b[1]);
+  int16_t rawAy = make16(b[2],  b[3]);
+  int16_t rawAz = make16(b[4],  b[5]);
+
+  // Convert raw data into physical units
+  float Ax_g = rawAx / ACC_LSB_PER_G;   // acceleration in g
+  float Ay_g = rawAy / ACC_LSB_PER_G;
+  float Az_g = rawAz / ACC_LSB_PER_G;
+
+  // Drive motor to the right x/y angle
+  int xAngle = map(rawAx,-16384, 16384, 0, 180);
+  int yAngle = map(rawAy,-16384, 16384, 0, 180);
+
+  servo1.write(xAngle);
+
+  // Print results over serial
+  Serial.print("Accel[g]  X: "); Serial.print(rawAx, DEC);
+  Serial.print("  Y: ");        Serial.print(rawAy, DEC);
+  Serial.print("  Z: ");        Serial.print(Az_g, 3);
+  Serial.println(xAngle);
+
+  delay(100);  // Pause 100 ms before next read (≈10 Hz output rate)
 }
