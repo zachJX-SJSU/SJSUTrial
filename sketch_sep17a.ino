@@ -3,8 +3,10 @@
 
 /* Set up */
 // ---- Servo Setup ----
-Servo servo1;
-int SERV_PIN1 = 9;
+Servo servo_x;
+Servo servo_y;
+int SERV_PIN_X = 9;
+int SERV_PIN_Y = 6;
 int angle = 0;
 
 // ---- MPU setup ----
@@ -13,11 +15,12 @@ int angle = 0;
 #define REG_ACCEL_XH  0x3B   // First register of the accelerometer output (14 bytes span Ax..Gz)
 
 const float ACC_LSB_PER_G    = 16384.0f;  // accelerometer: 16384 LSB = 1 g
-const float GYRO_LSB_PER_DPS = 131.0f;    // gyroscope: 131 LSB = 1 °/s
 /* End of set up */
 
-/* Helper functions for MPU communication, since MPU library is not allowed*/
-// combine two 8-bit registers into one signed 16-bit value
+// Forward-declaring helper functions
+
+/* Helper functions for MPU communication, since MPU library is not allowed
+  combine two 8-bit registers into one signed 16-bit value */
 static inline int16_t make16(uint8_t hi, uint8_t lo) { 
   return (int16_t)((hi << 8) | lo); 
 }
@@ -44,22 +47,22 @@ void i2cReadN(uint8_t startReg, uint8_t *buf, uint8_t n) {
 /* End of Helper functions*/
 
 void setup() {
-  // put your setup code here, to run once:
-  servo1.attach(SERV_PIN1);
+  // Set up X,Y servos
+  servo_x.attach(SERV_PIN_X); // Pin 9
+  servo_y.attach(SERV_PIN_Y); // Pin 6
+
   Serial.begin(9600);     // May change to 115200 baud for faster rate
   Wire.begin();           // Start I²C as master on SDA/SCL pins of Uno R4
 
-  // Wake up the MPU6050 (it starts in sleep mode by default)
-  i2cWrite8(REG_PWR_MGMT1, 0x00); // Clear the sleep bit
+  i2cWrite8(REG_PWR_MGMT1, 0x00); // Wake up the MPU6050 by clearing the sleep bit
   delay(50);                      // Small delay to stabilize
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
   uint8_t b[14];                     // Buffer to hold 14 bytes from MPU
   i2cReadN(REG_ACCEL_XH, b, 14);     // Read accel (6B), temp (2B), gyro (6B)
 
-  // Convert raw bytes into signed 16-bit integers
+  // Only care about accelerator data, not gyro data
   int16_t rawAx = make16(b[0],  b[1]);
   int16_t rawAy = make16(b[2],  b[3]);
   int16_t rawAz = make16(b[4],  b[5]);
@@ -73,13 +76,14 @@ void loop() {
   int xAngle = map(rawAx,-16384, 16384, 0, 180);
   int yAngle = map(rawAy,-16384, 16384, 0, 180);
 
-  servo1.write(xAngle);
+  servo_x.write(xAngle);
+  servo_y.write(yAngle);
 
   // Print results over serial
-  Serial.print("Accel[g]  X: "); Serial.print(rawAx, DEC);
-  Serial.print("  Y: ");        Serial.print(rawAy, DEC);
+  Serial.print("Accel[g]  X: "); Serial.print(Ax_g, 3); //Serial.print(rawAx, DEC);
+  Serial.print("  Y: ");        Serial.print(Ay_g, 3);
   Serial.print("  Z: ");        Serial.print(Az_g, 3);
   Serial.println(xAngle);
 
-  delay(100);  // Pause 100 ms before next read (≈10 Hz output rate)
+  delay(100);  // Pause 100 ms before next read
 }
