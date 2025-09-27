@@ -6,7 +6,7 @@
 Servo servo_x;
 Servo servo_y;
 int SERV_PIN_X = 9;
-int SERT_PIN_Y = 11;
+int SERV_PIN_Y = 11;
 int angle = 0;
 
 // ---- MPU setup ----
@@ -48,8 +48,8 @@ void i2cReadN(uint8_t startReg, uint8_t *buf, uint8_t n) {
 
 void setup() {
   // Set up X,Y servos
-  servo_x.attach(SERV_PIN_X);
-  servo_y.attach(SERV_PIN_Y);
+  servo_x.attach(SERV_PIN_X); // Pin 9
+  servo_y.attach(SERV_PIN_Y); // Pin 11
 
   Serial.begin(9600);     // May change to 115200 baud for faster rate
   Wire.begin();           // Start I²C as master on SDA/SCL pins of Uno R4
@@ -80,8 +80,8 @@ void loop() {
   servo_y.write(yAngle);
 
   // Print results over serial
-  Serial.print("Accel[g]  X: "); Serial.print(rawAx, DEC);
-  Serial.print("  Y: ");        Serial.print(rawAy, DEC);
+  Serial.print("Accel[g]  X: "); Serial.print(Ax_g, 3); //Serial.print(rawAx, DEC);
+  Serial.print("  Y: ");        Serial.print(Ay_g, 3);
   Serial.print("  Z: ");        Serial.print(Az_g, 3);
   Serial.println(xAngle);
 
